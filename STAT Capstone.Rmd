@@ -1,0 +1,338 @@
+---
+title: 'UVA Baseball: Pitching Optimization'
+author: "Adam Chow"
+date: "2024-07-28"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+## LOAD PACKAGES HERE
+library(tidyverse)
+library(readxl)
+library(stringr)
+library(rvest)
+library(plotly)
+library(ggplot2)
+library(shiny)
+library(rsconnect)
+library(knitr)
+
+war_values <- c(
+  3.1,-1.1,4.2,0.7,2.6,
+  0.2,1.0,1.7,2.0,3.3,
+  1.7,2.1,2.2,0.3,-1.2,
+  2.0,3.1,0.6,-0.5,2.2,
+  2.0,3.9,1.7,2.3,1.8,
+  5.4,-0.4,3.0,1.4,2.4,
+  1.8,0.1,0.8,2.8,2.8,
+  2.4,1.7,0.1,0.6,1.5,
+  5.5,1.1,1.2,-1.8,1.1,
+  2.9,2.3,-0.5,2.8,2.7,
+  0.5,3.2,1.9,0,1.8,
+  1.8,1.1,2.5,3.7,0,
+  1.8,4.5,-1.4,2.4,0.7,
+  2.2,0.3,2.5,0.7,-1.3,
+  0.8,2.1,1.5,3.5,1.8,
+  1.7,2.9,0.8,0.4,1.6,
+  2.0,1.0,0.9,0.8,1.8,
+  1.3,3.9,2.2,1.3,1.5,
+  1.0,2.1,5.1,1.6,1.3,
+  3.2,4.6,5.4,2.1,1.2,
+  2.1,2.3,1.5,2.3,3.3,
+  2.4,1.1,2.8,2.6,1.0,
+  3.6,4.4,0.7,2.1
+)
+
+left <- c(
+  1,1,1,0,0,
+  0,0,0,0,0,
+  0,0,0,0,0,
+  0,0,0,1,1,
+  0,1,0,0,1,
+  0,0,0,0,1,
+  0,0,0,0,0,
+  0,1,1,0,0,
+  0,1,1,0,0,
+  0,1,1,0,0,
+  1,0,0,0,0,
+  0,0,0,0,0,
+  0,0,0,1,0,
+  0,0,0,0,1,
+  0,0,0,0,0,
+  0,0,1,1,0,
+  0,0,0,1,0,
+  1,1,0,0,1,
+  1,0,1,1,0,
+  0,0,1,0,0,
+  1,0,0,0,0,
+  1,0,1,0,0,
+  0,0,0,0
+)
+```
+
+# Background
+
+## Import and Clean Data
+```{r}
+# Import 2024 MLB Pitching Data
+setwd("/Users/adamchow/Library/CloudStorage/Box-Box/UVA/Fall 2024 Classes/STAT 4996/")
+
+pitches <- read_csv("mlb_pitch_data.csv")
+expected <- read_csv("mlb_exp_stats.csv")
+
+mlb2024_df <- left_join(expected, pitches, by = "player_id")
+
+mlb2024_df <- mlb2024_df %>%
+  select(-pa, -player_id, -year.x, -year.y, -bip, -ba, -est_ba,
+         -est_ba_minus_ba_diff, -slg, -est_slg,
+         -est_slg_minus_slg_diff, -`last_name, first_name.y`) %>%
+  rename(name = `last_name, first_name.x`,
+         ev_avg = `exit_velocity_avg`,
+         fb_percent = `n_ff_formatted`,
+         fb_avg_velo = `ff_avg_speed`,
+         fb_avg_spin = `ff_avg_spin`,
+         fb_avg_hor = `ff_avg_break_x`,
+         fb_avg_vert = `ff_avg_break_z`,
+         sl_percent = `n_sl_formatted`,
+         sl_avg_velo = `sl_avg_speed`,
+         sl_avg_spin = `sl_avg_spin`,
+         sl_avg_hor = `sl_avg_break_x`,
+         sl_avg_vert = `sl_avg_break_z`,
+         ch_percent = `n_ch_formatted`,
+         ch_avg_velo = `ch_avg_speed`,
+         ch_avg_spin = `ch_avg_spin`,
+         ch_avg_hor = `ch_avg_break_x`,
+         ch_avg_vert = `ch_avg_break_z`,
+         cb_percent = `n_cu_formatted`,
+         cb_avg_velo = `cu_avg_speed`,
+         cb_avg_spin = `cu_avg_spin`,
+         cb_avg_hor = `cu_avg_break_x`,
+         cb_avg_vert = `cu_avg_break_z`,
+         sk_percent = `n_si_formatted`,
+         sk_avg_velo = `si_avg_speed`,
+         sk_avg_spin = `si_avg_spin`,
+         sk_avg_hor = `si_avg_break_x`,
+         sk_avg_vert = `si_avg_break_z`,
+         cu_percent = `n_fc_formatted`,
+         cu_avg_velo = `fc_avg_speed`,
+         cu_avg_spin = `fc_avg_spin`,
+         cu_avg_hor = `fc_avg_break_x`,
+         cu_avg_vert = `fc_avg_break_z`,
+         sp_percent = `n_fs_formatted`,
+         sp_avg_velo = `fs_avg_speed`,
+         sp_avg_spin = `fs_avg_spin`,
+         sp_avg_hor = `fs_avg_break_x`,
+         sp_avg_vert = `fs_avg_break_z`,
+         sw_percent = `n_st_formatted`,
+         sw_avg_velo = `st_avg_speed`,
+         sw_avg_spin = `st_avg_spin`,
+         sw_avg_hor = `st_avg_break_x`,
+         sw_avg_vert = `st_avg_break_z`) %>%
+  mutate(war = NA,
+         is_left = NA) %>%
+  select(name, is_left, war, everything()) %>%
+  slice(1:114) %>%
+  arrange(name)
+
+mlb2024_df$war[1:length(war_values)] <- war_values
+mlb2024_df$is_left[1:length(left)] <- left
+```
+
+
+## Find Most Effective Pitchers
+```{r}
+pitcher_success <- mlb2024_df %>%
+  select(1, 3, 4, 5, 7, 8, 10) %>%
+  column_to_rownames(var = "name") %>%
+  scale()
+
+clusters<-10
+
+##store between and within cluster variance
+within<-between<-array(0,clusters)
+
+for (k in 2:clusters)
+  
+{
+  set.seed(2)
+  km.out<-kmeans(pitcher_success, centers=k, nstart=20)
+  
+  between[k]<-km.out$betweenss
+  within[k]<-km.out$tot.withinss
+  
+}
+
+plot(c(2:clusters), between[-1], xlab="K", ylab="Between Cluster Variance", type='b')
+plot(c(2:clusters), within[-1], xlab="K", ylab="Total Within Cluster Variance", type='b')
+```
+
+By this plots we think that 4 clusters is the most appropriate number given the plot.
+
+### Create a 2D Plot of CLusters
+```{r}
+##4 means clustering
+set.seed(2)
+km.out4<-kmeans(pitcher_success, centers=4, nstart=20)
+
+##note UA.S after scaling is not a dataframe, so we convert it to one
+pitcher_success<-data.frame(pitcher_success)
+
+##scatterplot with different colors based on cluster assignment from 4-means 
+plot(pitcher_success$war,pitcher_success$era, pch=20, xlab="WAR", ylab="ERA", col=(km.out4$cluster+1))
+text(pitcher_success$war,pitcher_success$era, labels=rownames(pitcher_success), cex=0.75, font=1, col=(km.out4$cluster+1))
+```
+
+```{r}
+km.out4
+```
+
+Out of the 114 Qualified Starting Pitchers in 2024, here is a list of the most elite pitchers this season:
+1. Corbin Burnes (R) 6-3, 245lbs
+2. Hunter Brown (R) 6-2, 220lbs
+3. Dylan Cease (R) 6-2, 200lbs
+4. Garrett Crochet (L) 6-6, 245lbs
+5. Jack Flaherty (R) 6-4, 225lbs
+6. Max Fried (L) 6-4, 190lbs
+7. Logan Gilbert (R) 6-6, 215lbs
+8. Tyler Glasnow (R) 6-8, 225lbs
+9. Hunter Greene (R) 6-5, 242lbs
+10. Michael King (R) 6-3, 210lbs
+11. Nick Martinez (R) 6-1, 200lbs
+12. Cole Ragans (L) 6-4, 190lbs
+13. Joe Ryan (R) 6-2, 205lbs
+14. Chris Sale (L) 6-6, 180lbs
+15. Paul Skenes (R) 6-6, 235lbs
+16. Tarik Skubal (L) 6-3, 240lbs
+17. Justin Steele (L) 6-2, 205lbs
+18. Ranger Suarez (R) 6-1, 217lbs
+19. Zack Wheeler (R) 6-4, 195lbs
+
+## Identify qualities that make pitchers elite
+```{r}
+# Find the Appropriate number of Clusters for these elite pitchers
+last_names <- c("Burnes", "Brown", "Cease", "Crochet", "Flaherty", 
+                "Fried", "Gilbert", "Glasnow", "Greene", "King", 
+                "Martinez", "Ragans", "Ryan", "Sale", "Skenes", 
+                "Skubal", "Steele", "Wheeler")
+
+# Extract the last names from the "name" column
+mlb2024_df$last_name <- str_extract(mlb2024_df$name, "^[^,]+")
+
+# Subset the dataframe based on the last names
+elite_pitchers <- mlb2024_df %>%
+  filter(last_name %in% last_names | row_number() == 105) %>%
+  select(-last_name) %>%
+  mutate(
+    height = c(75, 74, 74, 78, 76, 76, 78, 80, 77, 75, 73, 76, 74, 78, 78, 75, 74, 73, 76),
+    weight = c(245, 220, 200, 245, 225, 190, 215, 225, 242, 210, 200, 190, 205, 180, 235, 240, 205, 217, 195)
+  )
+
+# Find optimal Number of clusters depending on physical stature
+elite_scale <- elite_pitchers %>%
+  select(1, 51, 52) %>%
+  column_to_rownames(var = "name") %>%
+  scale()
+
+clusters<-10
+
+##store between and within cluster variance
+within<-between<-array(0,clusters)
+
+for (k in 2:clusters)
+  
+{
+  set.seed(2)
+  km.out<-kmeans(pitcher_success, centers=k, nstart=20)
+  
+  between[k]<-km.out$betweenss
+  within[k]<-km.out$tot.withinss
+  
+}
+
+plot(c(2:clusters), between[-1], xlab="K", ylab="Between Cluster Variance", type='b')
+plot(c(2:clusters), within[-1], xlab="K", ylab="Total Within Cluster Variance", type='b')
+```
+
+By these plots we think that 4 clusters is the most appropriate number given the plot.
+
+### Create a 2D Plot of CLusters
+```{r}
+##4 means clustering
+set.seed(2024)
+km.out4<-kmeans(elite_scale, centers=4, nstart=20)
+
+##note UA.S after scaling is not a dataframe, so we convert it to one
+elite_scale<-data.frame(elite_scale)
+
+##scatterplot with different colors based on cluster assignment from 4-means 
+plot(elite_scale$height,elite_scale$weight, pch=20, xlab="Height", ylab="Weight", col=(km.out4$cluster+1))
+text(elite_scale$height,elite_scale$weight, labels=rownames(elite_scale), cex=0.75, font=1, col=(km.out4$cluster+1))
+```
+
+```{r}
+km.out4
+```
+
+Cluster 1: Average Height (6'2"-6'5"), but Stocky build with emphasis on muscle to produce power
+Cluster 2: Extremely Tall (6'6"-6'8") genetic anomalies, Also weight more than the average pitcher due to sheer height
+Cluster 3: Average Height (6'2"-6'5"), but Lanky, slender build with emphasis on leverage and flexibility to produce power
+Cluster 4: Undersized both in Height and Weight, most likely outsmarting hitters due to lack of overwhelming physical gifts (Might have to dive in deeper to see what each pitcher does differently to sustain effectiveness)
+
+## Cluster 1
+```{r}
+elite_pitches <- elite_pitchers %>%
+  select(-3, -4, -5, -6, -7, -8, -9, -10) %>%
+  column_to_rownames(var = "name")
+
+# Convert Vertical Break to IVB
+elite_pitches <- elite_pitches %>%
+  mutate(fb_avg_vert = fb_avg_vert + (523 / fb_avg_velo)^2) %>%
+  mutate(sl_avg_vert = sl_avg_vert + (523 / sl_avg_velo)^2) %>%
+  mutate(ch_avg_vert = ch_avg_vert + (523 / ch_avg_velo)^2) %>%
+  mutate(cb_avg_vert = cb_avg_vert + (523 / cb_avg_velo)^2) %>%
+  mutate(sk_avg_vert = sk_avg_vert + (523 / sk_avg_velo)^2) %>%
+  mutate(cu_avg_vert = cu_avg_vert + (523 / cu_avg_velo)^2) %>%
+  mutate(sp_avg_vert = sp_avg_vert + (523 / sp_avg_velo)^2) %>%
+  mutate(sw_avg_vert = sw_avg_vert + (523 / sw_avg_velo)^2)
+
+clusters <- c(
+  "Brown, Hunter" = 1, "Burnes, Corbin" = 4, "Cease, Dylan" = 4, 
+  "Crochet, Garrett" = 2, "Flaherty, Jack" = 1, "Fried, Max" = 3, 
+  "Gilbert, Logan" = 2, "Glasnow, Tyler" = 2, "Greene, Hunter" = 1, 
+  "King, Michael" = 4, "Martinez, Nick" = 4, "Ragans, Cole" = 3, 
+  "Ryan, Joe" = 4, "Sale, Chris" = 3, "Skenes, Paul" = 2, 
+  "Skubal, Tarik" = 1, "Steele, Justin" = 4, "Suárez, Ranger" = 4, 
+  "Wheeler, Zack" = 3
+)
+
+# Split the elite_pitches dataframe into four separate dataframes
+c1 <- elite_pitches[rownames(elite_pitches) %in% names(groupings[groupings == 1]), ]
+c2 <- elite_pitches[rownames(elite_pitches) %in% names(groupings[groupings == 2]), ]
+c3 <- elite_pitches[rownames(elite_pitches) %in% names(groupings[groupings == 3]), ]
+c4 <- elite_pitches[rownames(elite_pitches) %in% names(groupings[groupings == 4]), ]
+```
+
+Cluster 1 (Stocky) Standard Pitch Arsenal: FB, SL, CH, CB, ~SK, ~CU
+Cluster 2 (Genetic Freak) Standard Pitch Arsenal: FB, SL/SW, SK, ~CH/CB, ~CU
+Cluster 3 (Lanky) Standard Pitch Arsenal: FB, SL/SW, CH/SP, ~CB, ~SK, ~CU
+Cluster 4 (Anomalies) Standard Pitch Arsenal: Much more Variability SK-SL/CH is most used combination
+
+*We want our UVA Pitchers to ideally fit into one of these Archetypes*
+
+## Shiny Plotly Graph
+
+**Shiny App**: <https://a-chow3.shinyapps.io/Shiny1/>
+
+![Evolution of Play Type Efficiency in the NFL over the past Decade](/Users/adamchow/Library/CloudStorage/Box-Box/UVA/Spring 2024 Classes/STAT 3280/shiny1.jpeg) 
+
+
+
+
+
+
+
+
