@@ -18,8 +18,6 @@ library(rvest)
 library(plotly)
 library(ggplot2)
 library(shiny)
-library(rsconnect)
-library(knitr)
 
 war_values <- c(
   3.1,-1.1,4.2,0.7,2.6,
@@ -325,9 +323,67 @@ Cluster 4 (Anomalies) Standard Pitch Arsenal: Much more Variability SK-SL/CH is 
 
 ## Shiny Plotly Graph
 
-**Shiny App**: <https://a-chow3.shinyapps.io/Shiny1/>
+**Shiny App**: 
 
-![Evolution of Play Type Efficiency in the NFL over the past Decade](/Users/adamchow/Library/CloudStorage/Box-Box/UVA/Spring 2024 Classes/STAT 3280/shiny1.jpeg) 
+
+# UVA Game Data
+```{r}
+library(tidyverse)
+library(lubridate)
+
+setwd("/Users/adamchow/Library/CloudStorage/Box-Box/UVA/Fall 2024 Classes/STAT 4996/Old Files")
+
+process_game <- function(file) {
+  read_csv(file) %>%
+    select(2:70) %>%
+    select(-22, -27) %>%
+    mutate(Date = ymd(Date))
+}
+
+game1 <- process_game("game1.csv")
+game2 <- process_game("game2.csv")
+game3 <- process_game("game3.csv")
+game4 <- process_game("game4.csv")
+game5 <- process_game("game5.csv")
+game6 <- process_game("game6.csv")
+game7 <- process_game("game7.csv")
+game8 <- process_game("game8.csv")
+
+uva_games <- bind_rows(game1, game2, game3, game4, game5, game6, game7, game8) %>%
+  filter(PitcherTeam == "VIR_CAV")
+
+write_csv(uva_games, "filtered_uva_games.csv")
+```
+
+```{r}
+heat <- game %>% 
+      filter(Pitcher == "Edgington, Brian") %>%
+      group_by(Pitcher,Count, Zone, TaggedPitchType, BatterSide) %>%
+      summarise(
+        total = n(),
+        putaway = sum(PitchCall %in% c("StrikeCalled", "StrikeSwinging")),
+        putaway_rate = round(putaway / total, 2),
+        # Hard Hit Balls
+        hhb = sum(ExitSpeed > 87),
+        # In Play Avg EV
+        in_ev = mean(ExitSpeed),
+        .groups = 'drop'
+      )
+
+heat
+```
+
+```{r}
+tab <- game %>%
+      filter(Pitcher == "Edgington, Brian") %>%
+      filter(Count == "0-0", Zone == 1)
+
+tab
+```
+
+
+
+
 
 
 
