@@ -398,7 +398,7 @@ server <- function(input, output, session) {
       "Hard Hit Balls: ", (heat$hhb), "<br>",
       "Avg EV: ", (heat$in_ev)
     )
-    
+    # Make NA Gray ****
     plot_ly(heat_data(), 
             x = ~Zone, 
             y = ~Count, 
