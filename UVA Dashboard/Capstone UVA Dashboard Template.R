@@ -95,6 +95,22 @@ heat <- game %>%
     .groups = 'drop'
   )
 
+# Create Arm Angle Column
+game <- game %>%
+  mutate(ArmAngle = ((RelHeight - 5) / abs(RelSide)) * (180/pi))
+
+## Add Checks ##
+FIP_C <- 3.17352145
+game <- game %>%
+  mutate(
+    BB = ifelse(Balls == 3 & PitchCall == "BallCalled", 1, 0),
+    HBP = ifelse(PitchCall == "HitByPitch", 1, 0),
+    K = ifelse(Strikes == 2 & (PitchCall == "StrikeCalled" | PitchCall == "StrikeSwinging"), 1, 0),
+    `1B` = ifelse(PlayResult == "Single", 1, 0),
+    `2B` = ifelse(PlayResult == "Double", 1, 0),
+    `3B` = ifelse(PlayResult == "Triple", 1, 0),
+    HR = ifelse(PlayResult == "HomeRun", 1, 0)
+  )
 
 
 # Shiny App --------
@@ -135,25 +151,27 @@ ui <- fluidPage(
                )
              )
     ),
-    tabPanel("Outcomes",
-             #sidebarLayout(
-             #  sidebarPanel(
-              #   selectInput("pitcher_outcomes", "Select Pitcher:", 
-               #              choices = unique(game$Pitcher))
-               #),
-               #mainPanel(
-                # reactableOutput("outcomes_table")
-               #)
-             #)
-    ),
-    tabPanel("Strike Zone",
+    tabPanel("Metrics",
              sidebarLayout(
                sidebarPanel(
-                 selectInput("pitcher", "Select Pitcher:", 
-                             choices = unique(game$Pitcher))
+                 selectInput("pitcher_metrics", "Select Pitcher:",
+                             choices = c("All", unique(game$Pitcher))),
+                 selectInput("pitch_type_metrics", "Select Pitch Type:",
+                             choices = c("All", unique(game$TaggedPitchType)))
                ),
                mainPanel(
-                 plotlyOutput("strikezone_plot")
+                 dataTableOutput("metrics_table")
+               )
+             )
+    ),
+    tabPanel("Results/Split",
+             sidebarLayout(
+               sidebarPanel(
+                 selectInput("split_pitcher", "Select Pitcher:",
+                             choices = c("All", unique(game$Pitcher)))
+               ),
+               mainPanel(
+                 dataTableOutput("split_table")
                )
              )
     ),
@@ -302,56 +320,91 @@ server <- function(input, output, session) {
       )
   })
   
-  # Third Tab ---- Outcomes
+  # Third Tab ---- Metrics
   
-  
-  # Fourth Slide ---- Strike Zone
-  
-  # Reactive expression to filter the data by selected pitcher
-  zone_data <- reactive({
-    zone <- game %>% 
-      filter(Pitcher == input$pitcher)
-    
-    if (input$pitch_type != "All") {
-      zone <- zone %>% filter(TaggedPitchType == input$pitch_type)
+  output$metrics_table <- renderDataTable({
+    filtered_metric_data <- game
+    if (input$pitcher_metrics != "All") {
+      filtered_metric_data <- filtered_metric_data %>%
+        filter(Pitcher == input$pitcher_metrics)
+    }
+    if (input$pitch_type_metrics != "All") {
+      filtered_metric_data <- filtered_metric_data %>%
+        filter(TaggedPitchType == input$pitch_type_metrics)
     }
     
-    zone
+    #Group by Pitcher and Pitch Type
+    table <- filtered_metric_data %>%
+      group_by(Pitcher, TaggedPitchType) %>%
+      summarize(
+        Velocity = round(mean(RelSpeed, na.rm=TRUE), 1),
+        `Effective Velocity` = round(mean(EffectVelo, na.rm=TRUE), 1),
+        `Spin Rate` = round(mean(SpinRate, na.rm=TRUE), 0),
+        `IVB` = round(mean(InducedVertBreak, na.rm=TRUE), 1),
+        `HB` = round(mean(HorzBreak, na.rm=TRUE), 1),
+        `V Approach Angle` = round(mean(VertApprAngle, na.rm=TRUE), 2),
+        `H Approach Angle` = round(mean(HorzApprAngle, na.rm=TRUE), 2),
+        AvgEV = mean(ExitSpeed, na.rm = TRUE),
+      ) %>%
+      mutate(
+        AvgEV = sprintf("%.1f", AvgEV),
+      )
+    
+    table[is.na(table)] <- "-"
+    
+    datatable(table, options = list(
+      scrollY = "400px",  # Set the height for the vertical scrollable area
+      scrollX = TRUE,     # Enable horizontal scrolling
+      paging = FALSE,     # Disable pagination
+      fixedHeader = TRUE, # Keep the header fixed
+      dom = 'Bfrtip',     # Add buttons for export (optional)
+      buttons = c('copy', 'csv', 'excel') # Optional: add buttons for exporting data
+      
+    ))
+    
+  })
+
+  
+  # Fourth Slide ---- Results/Splits
+  
+  output$split_table <- renderDataTable({
+    filtered_split_data <- game
+    if (input$split_pitcher != "All") {
+      filtered_split_data <- filtered_split_data %>%
+        filter(Pitcher == input$split_pitcher)
+    }
+    
+    #Group by Pitcher and Pitch Type
+    table <- filtered_split_data %>%
+      group_by(Pitcher) %>%
+      summarize(
+        `Effective Velocity` = round(mean(EffectVelo, na.rm=TRUE), 1),
+        `Spin Rate` = round(mean(SpinRate, na.rm=TRUE), 0),
+        `IVB` = round(mean(InducedVertBreak, na.rm=TRUE), 1),
+        `HB` = round(mean(HorzBreak, na.rm=TRUE), 1),
+        `HR` = sum(PlayResult == "HomeRun", na.rm = TRUE),
+        `TB` = (`1B` + (`2B` * 2) + (`3B` * 3) + (HR * 4)),
+        AvgEV = mean(ExitSpeed, na.rm = TRUE),
+      ) %>%
+      mutate(
+        AvgEV = sprintf("%.1f", AvgEV),
+      )
+    
+    table[is.na(table)] <- "-"
+    
+    datatable(table, options = list(
+      scrollY = "400px",  # Set the height for the vertical scrollable area
+      scrollX = TRUE,     # Enable horizontal scrolling
+      paging = FALSE,     # Disable pagination
+      fixedHeader = TRUE, # Keep the header fixed
+      dom = 'Bfrtip',     # Add buttons for export (optional)
+      buttons = c('copy', 'csv', 'excel') # Optional: add buttons for exporting data
+      
+    ))
+    
   })
   
-  # Render the Plotly Strike Zone Plot
-  output$strikezone_plot <- renderPlotly({
-    # Get the filtered data for the selected pitcher
-    strikezone_data <- zone_data()
-    
-    # Create the Plotly strike zone graph
-    all_pitches_graph <- ggplot(strikezone_data) +
-      geom_rect(aes(xmin=-8.5, xmax=8.5, ymin=18, ymax=42), alpha=0.2, color = "black") +
-      geom_rect(aes(xmin=-11.5, xmax=11.5, ymin=15, ymax=45), alpha=0.1, color = "black", linetype = "dashed") +
-      geom_point(aes(x = PlateLocSide * 12, y = PlateLocHeight * 12, color = TaggedPitchType)) +
-      theme_minimal() +
-      coord_cartesian(xlim = c(-54, 54), ylim = c(-10, 72)) +
-      labs(title = paste("All Pitches - Pitcher's View:", input$pitcher)) +
-      scale_color_manual(values = pitch_colors,
-                         # labels = c("CH", "CB", "CU", "FS", "SI", "SL", "SP", "TS"),
-                         breaks = names(pitch_colors)) +
-      facet_wrap(~TaggedPitchType, ncol = 3) +
-      theme(axis.ticks.y = element_blank(),
-            axis.text.y = element_blank(),
-            axis.title.y = element_blank(),
-            axis.ticks.x = element_blank(),
-            axis.text.x = element_blank(),
-            axis.title.x = element_blank(),
-            legend.title = element_blank(),
-            legend.position = "top",
-            plot.title = element_text(size = 13, hjust = 0.5, face = "bold"))
-    
-    # Convert ggplot object to Plotly object
-    # ggplotly(all_pitches_graph)
-  })
-  
-  ## Filter by Play Outcome: Whiff/Ball/In play
-  
+
   # Fifth Tab - Count Heat Map
   
   # Filter data based on selected pitcher
