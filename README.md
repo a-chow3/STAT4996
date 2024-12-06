@@ -44,7 +44,7 @@ This dashboard aims to provide a seamless and interactive tool for UVA's basebal
 
 ---
 
-## 3. UVA Predictive Shiny App
+## 3. UVA Statistical Analysis & Prediction
 
 *Content to be added.*
 
