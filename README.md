@@ -46,6 +46,48 @@ This dashboard aims to provide a seamless and interactive tool for UVA's basebal
 
 ## 3. UVA Statistical Analysis & Prediction
 
-*Content to be added.*
+This notebook, `UVA_Baseball_Prediction_Models`,  implements the **Pitch Efficiency Score (PES)** creation and subsequent **predictive modeling pipeline** designed for UVA baseball’s pitching optimization initiative.
+
+### Overview
+
+The central problem addressed here is **quantifying the true value of individual pitch outcomes** in a way that can drive predictive modeling and decision-making for pitchers and coaches.
+To accomplish this, we developed a **hard-coded run value attribution system** that assigns a numeric value to every possible pitch result. These values capture the run-producing and run-preventing impact of an event, enabling us to calculate a preliminary **Pitch Efficiency Score (PES)** for every pitch thrown.
+
+
+### Methodology
+
+#### 1. **Data Integration**
+
+* Ingests **comprehensive play-by-play datasets** collected from UVA baseball’s game tracking system.
+* Cleans, standardizes, and merges pitch-level data with batter/pitcher handedness, pitch type, and situational context.
+
+#### 2. **Run Value Attribution & PES Calculation**
+
+* Assigns **pre-determined run values** to all pitch outcomes (e.g., strikeout, hard contact, groundout, walk).
+* Calculates a **Pitch Efficiency Score** for every recorded pitch, producing a single, interpretable measure of pitch success.
+
+#### 3. **Pitch Clustering by Matchup Context**
+
+* Groups pitches by:
+
+  * Pitcher handedness vs. batter handedness (e.g., **L vs R**, **R vs L**, etc.)
+  * Pitch type (e.g., Slider, Fastball, Changeup)
+* Clusters pitches within these groups based on their PES values to identify **profiles of successful pitches** in specific matchups.
+* Example: *In the L/R matchup, sliders buried down-and-in to the batter outperform sliders left over the outer half, which tend to enter the hitter’s barrel path.*
+
+#### 4. **Decision Tree Modeling**
+
+* Builds **separate decision tree models** for each **matchup x pitch type** combination.
+* Uses pitcher-specific average metrics (velocity, spin rate, movement, location) as input features.
+* Outputs an **interpretable tree** showing:
+
+  * Key metric thresholds where a pitch shifts from being advantageous for the pitcher (**white node**) to advantageous for the hitter (**orange node**).
+  * Contextual benchmarks for adjusting pitch execution to improve outcomes.
 
 ---
+
+### Practical Applications
+
+* **Pitch Design & Execution**: Allows pitchers to see exactly how their unique metric profile influences pitch effectiveness in different matchups.
+* **Scouting & Game Planning**: Helps coaches identify which pitch types are most effective in specific situations and what execution thresholds must be met.
+* **Player Development**: Provides a repeatable, metric-based framework for tracking improvements in pitch quality over time.
