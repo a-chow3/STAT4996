@@ -83,11 +83,3 @@ To accomplish this, we developed a **hard-coded run value attribution system** t
 
   * Key metric thresholds where a pitch shifts from being advantageous for the pitcher (**white node**) to advantageous for the hitter (**orange node**).
   * Contextual benchmarks for adjusting pitch execution to improve outcomes.
-
----
-
-### Practical Applications
-
-* **Pitch Design & Execution**: Allows pitchers to see exactly how their unique metric profile influences pitch effectiveness in different matchups.
-* **Scouting & Game Planning**: Helps coaches identify which pitch types are most effective in specific situations and what execution thresholds must be met.
-* **Player Development**: Provides a repeatable, metric-based framework for tracking improvements in pitch quality over time.
